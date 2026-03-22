@@ -4,13 +4,17 @@
 
 <p align="center"><strong>High-performance embedded JSON database for PHP.</strong></p>
 
-<p align="center">Zero-config, schema-optional, powered by a native Rust engine via FFI.</p>
+<p align="center">Zero external dependencies. No extensions required. Just PHP and raw speed.</p>
 
 ---
 
 ## Requirements
 
-- PHP >= 8.1 with FFI extension enabled (`ffi.enable=true` in php.ini)
+- PHP >= 8.1
+
+### Optional
+
+- **FFI extension** (`ffi.enable=true` in php.ini) — enables the FFI driver for maximum performance. Without it, the wrapper automatically falls back to the process driver (`anvildb-server` binary via `proc_open`), which works on any PHP installation with no extensions.
 
 ## Installation
 

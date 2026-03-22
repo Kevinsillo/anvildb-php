@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace AnvilDb\Collection;
 
+use AnvilDb\Driver\DriverInterface;
 use AnvilDb\Exception\AnvilDbException;
-use AnvilDb\FFI\Bridge;
 use AnvilDb\Query\QueryBuilder;
 
 /**
@@ -13,16 +13,16 @@ use AnvilDb\Query\QueryBuilder;
  */
 class Collection
 {
-    private \FFI\CData $handle;
+    private DriverInterface $driver;
     private string $name;
 
     /**
-     * @param \FFI\CData $handle Database engine handle
-     * @param string     $name   Collection name
+     * @param DriverInterface $driver Database engine driver
+     * @param string          $name   Collection name
      */
-    public function __construct(\FFI\CData $handle, string $name)
+    public function __construct(DriverInterface $driver, string $name)
     {
-        $this->handle = $handle;
+        $this->driver = $driver;
         $this->name = $name;
     }
 
@@ -48,22 +48,8 @@ class Collection
      */
     public function insert(array $document): array
     {
-        $ffi = Bridge::get();
         $json = json_encode($document, JSON_THROW_ON_ERROR);
-        $resultPtr = $ffi->anvildb_insert($this->handle, $this->name, $json);
-
-        if ($resultPtr === null) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown insert error');
-            throw new AnvilDbException($errorMsg);
-        }
-
-        if (is_string($resultPtr)) {
-            $resultJson = $resultPtr;
-        } else {
-            $resultJson = \FFI::string($resultPtr);
-            $ffi->anvildb_free_string($resultPtr);
-        }
+        $resultJson = $this->driver->insert($this->name, $json);
 
         return json_decode($resultJson, true, 512, JSON_THROW_ON_ERROR);
     }
@@ -72,7 +58,7 @@ class Collection
      * Insert multiple documents into the collection in a single operation.
      *
      * More efficient than calling {@see insert()} in a loop, as it sends all
-     * documents to the engine in a single FFI call.
+     * documents to the engine in a single call.
      *
      * @param array<int, array<string, mixed>> $documents Indexed array of document arrays
      *
@@ -92,22 +78,8 @@ class Collection
      */
     public function bulkInsert(array $documents): array
     {
-        $ffi = Bridge::get();
         $json = json_encode($documents, JSON_THROW_ON_ERROR);
-        $resultPtr = $ffi->anvildb_bulk_insert($this->handle, $this->name, $json);
-
-        if ($resultPtr === null) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown bulk insert error');
-            throw new AnvilDbException($errorMsg);
-        }
-
-        if (is_string($resultPtr)) {
-            $resultJson = $resultPtr;
-        } else {
-            $resultJson = \FFI::string($resultPtr);
-            $ffi->anvildb_free_string($resultPtr);
-        }
+        $resultJson = $this->driver->bulkInsert($this->name, $json);
 
         return json_decode($resultJson, true, 512, JSON_THROW_ON_ERROR);
     }
@@ -130,18 +102,10 @@ class Collection
      */
     public function find(string $id): ?array
     {
-        $ffi = Bridge::get();
-        $resultPtr = $ffi->anvildb_find_by_id($this->handle, $this->name, $id);
+        $resultJson = $this->driver->findById($this->name, $id);
 
-        if ($resultPtr === null) {
+        if ($resultJson === null) {
             return null;
-        }
-
-        if (is_string($resultPtr)) {
-            $resultJson = $resultPtr;
-        } else {
-            $resultJson = \FFI::string($resultPtr);
-            $ffi->anvildb_free_string($resultPtr);
         }
 
         return json_decode($resultJson, true, 512, JSON_THROW_ON_ERROR);
@@ -166,17 +130,10 @@ class Collection
      */
     public function update(string $id, array $data): bool
     {
-        $ffi = Bridge::get();
         $json = json_encode($data, JSON_THROW_ON_ERROR);
-        $result = $ffi->anvildb_update($this->handle, $this->name, $id, $json);
+        $this->driver->update($this->name, $id, $json);
 
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown update error');
-            throw new AnvilDbException($errorMsg);
-        }
-
-        return $result === 0;
+        return true;
     }
 
     /**
@@ -190,16 +147,9 @@ class Collection
      */
     public function delete(string $id): bool
     {
-        $ffi = Bridge::get();
-        $result = $ffi->anvildb_delete($this->handle, $this->name, $id);
+        $this->driver->delete($this->name, $id);
 
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown delete error');
-            throw new AnvilDbException($errorMsg);
-        }
-
-        return $result === 0;
+        return true;
     }
 
     /**
@@ -235,7 +185,7 @@ class Collection
      */
     public function where(string $field, string $operator, mixed $value): QueryBuilder
     {
-        return (new QueryBuilder($this->handle, $this->name))
+        return (new QueryBuilder($this->driver, $this->name))
             ->where($field, $operator, $value);
     }
 
@@ -258,7 +208,7 @@ class Collection
      */
     public function whereBetween(string $field, mixed $min, mixed $max): QueryBuilder
     {
-        return (new QueryBuilder($this->handle, $this->name))
+        return (new QueryBuilder($this->driver, $this->name))
             ->whereBetween($field, $min, $max);
     }
 
@@ -278,7 +228,7 @@ class Collection
      */
     public function whereIn(string $field, array $values): QueryBuilder
     {
-        return (new QueryBuilder($this->handle, $this->name))
+        return (new QueryBuilder($this->driver, $this->name))
             ->whereIn($field, $values);
     }
 
@@ -298,7 +248,7 @@ class Collection
      */
     public function whereNotIn(string $field, array $values): QueryBuilder
     {
-        return (new QueryBuilder($this->handle, $this->name))
+        return (new QueryBuilder($this->driver, $this->name))
             ->whereNotIn($field, $values);
     }
 
@@ -332,7 +282,7 @@ class Collection
         string $type = 'inner',
         ?string $prefix = null,
     ): QueryBuilder {
-        return (new QueryBuilder($this->handle, $this->name))
+        return (new QueryBuilder($this->driver, $this->name))
             ->join($collection, $leftField, $rightField, $type, $prefix);
     }
 
@@ -361,7 +311,7 @@ class Collection
         string $rightField,
         ?string $prefix = null,
     ): QueryBuilder {
-        return (new QueryBuilder($this->handle, $this->name))
+        return (new QueryBuilder($this->driver, $this->name))
             ->leftJoin($collection, $leftField, $rightField, $prefix);
     }
 
@@ -386,7 +336,7 @@ class Collection
      */
     public function sum(string $field, ?string $alias = null): QueryBuilder
     {
-        return (new QueryBuilder($this->handle, $this->name))
+        return (new QueryBuilder($this->driver, $this->name))
             ->sum($field, $alias);
     }
 
@@ -408,7 +358,7 @@ class Collection
      */
     public function avg(string $field, ?string $alias = null): QueryBuilder
     {
-        return (new QueryBuilder($this->handle, $this->name))
+        return (new QueryBuilder($this->driver, $this->name))
             ->avg($field, $alias);
     }
 
@@ -427,7 +377,7 @@ class Collection
      */
     public function min(string $field, ?string $alias = null): QueryBuilder
     {
-        return (new QueryBuilder($this->handle, $this->name))
+        return (new QueryBuilder($this->driver, $this->name))
             ->min($field, $alias);
     }
 
@@ -446,7 +396,7 @@ class Collection
      */
     public function max(string $field, ?string $alias = null): QueryBuilder
     {
-        return (new QueryBuilder($this->handle, $this->name))
+        return (new QueryBuilder($this->driver, $this->name))
             ->max($field, $alias);
     }
 
@@ -472,7 +422,7 @@ class Collection
      */
     public function groupBy(string|array $fields, array $aggregations = []): QueryBuilder
     {
-        return (new QueryBuilder($this->handle, $this->name))
+        return (new QueryBuilder($this->driver, $this->name))
             ->groupBy($fields, $aggregations);
     }
 
@@ -490,7 +440,7 @@ class Collection
      */
     public function orderBy(string $field, string $direction = 'asc'): QueryBuilder
     {
-        return (new QueryBuilder($this->handle, $this->name))
+        return (new QueryBuilder($this->driver, $this->name))
             ->orderBy($field, $direction);
     }
 
@@ -503,7 +453,7 @@ class Collection
      */
     public function all(): array
     {
-        return (new QueryBuilder($this->handle, $this->name))->get();
+        return (new QueryBuilder($this->driver, $this->name))->get();
     }
 
     /**
@@ -515,7 +465,7 @@ class Collection
      */
     public function count(): int
     {
-        return (new QueryBuilder($this->handle, $this->name))->count();
+        return (new QueryBuilder($this->driver, $this->name))->count();
     }
 
     /**
@@ -545,14 +495,7 @@ class Collection
      */
     public function createIndex(string $field, string $type = 'hash'): void
     {
-        $ffi = Bridge::get();
-        $result = $ffi->anvildb_create_index($this->handle, $this->name, $field, $type);
-
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown index error');
-            throw new AnvilDbException($errorMsg);
-        }
+        $this->driver->createIndex($this->name, $field, $type);
     }
 
     /**
@@ -568,14 +511,7 @@ class Collection
      */
     public function dropIndex(string $field): void
     {
-        $ffi = Bridge::get();
-        $result = $ffi->anvildb_drop_index($this->handle, $this->name, $field);
-
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown drop index error');
-            throw new AnvilDbException($errorMsg);
-        }
+        $this->driver->dropIndex($this->name, $field);
     }
 
     /**
@@ -604,15 +540,8 @@ class Collection
      */
     public function setSchema(array $schema): void
     {
-        $ffi = Bridge::get();
         $json = json_encode($schema, JSON_THROW_ON_ERROR);
-        $result = $ffi->anvildb_set_schema($this->handle, $this->name, $json);
-
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown schema error');
-            throw new AnvilDbException($errorMsg);
-        }
+        $this->driver->setSchema($this->name, $json);
     }
 
     /**
@@ -629,14 +558,7 @@ class Collection
      */
     public function flush(): void
     {
-        $ffi = Bridge::get();
-        $result = $ffi->anvildb_flush_collection($this->handle, $this->name);
-
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown flush error');
-            throw new AnvilDbException("Failed to flush collection: {$errorMsg}");
-        }
+        $this->driver->flushCollection($this->name);
     }
 
     /**

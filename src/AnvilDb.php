@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace AnvilDb;
 
 use AnvilDb\Collection\Collection;
-use AnvilDb\Exception\FFIException;
+use AnvilDb\Driver\DriverFactory;
+use AnvilDb\Driver\DriverInterface;
 use AnvilDb\Exception\AnvilDbException;
-use AnvilDb\FFI\Bridge;
 
 /**
  * Main entry point for the AnvilDB embedded document database.
  */
 class AnvilDb
 {
-    private \FFI\CData $handle;
+    private DriverInterface $driver;
     private bool $closed = false;
 
     /**
@@ -27,7 +27,7 @@ class AnvilDb
      * @param string|null $encryptionKey 64-character hex string (32 bytes) for AES-256-GCM at-rest encryption.
      *                                   Pass `null` for an unencrypted database.
      *
-     * @throws FFIException If the native engine fails to load or open
+     * @throws AnvilDbException If the native engine fails to load or open
      *
      * ```php
      * // Unencrypted
@@ -39,14 +39,7 @@ class AnvilDb
      */
     public function __construct(string $dataPath, ?string $encryptionKey = null)
     {
-        $ffi = Bridge::get();
-        $handle = $ffi->anvildb_open($dataPath, $encryptionKey);
-
-        if ($handle === null) {
-            throw new FFIException('Failed to open AnvilDb engine');
-        }
-
-        $this->handle = $handle;
+        $this->driver = DriverFactory::create($dataPath, $encryptionKey);
 
         // Surface any warnings from the engine (e.g. key passed to unencrypted DB)
         $this->consumeWarnings();
@@ -72,8 +65,7 @@ class AnvilDb
     public function close(): void
     {
         if (!$this->closed) {
-            $ffi = Bridge::get();
-            $ffi->anvildb_close($this->handle);
+            $this->driver->close();
             $this->closed = true;
         }
     }
@@ -92,8 +84,7 @@ class AnvilDb
     public function shutdown(): void
     {
         if (!$this->closed) {
-            $ffi = Bridge::get();
-            $ffi->anvildb_shutdown($this->handle);
+            $this->driver->shutdown();
             $this->closed = true;
         }
     }
@@ -113,14 +104,7 @@ class AnvilDb
     public function flush(): void
     {
         $this->ensureOpen();
-        $ffi = Bridge::get();
-        $result = $ffi->anvildb_flush($this->handle);
-
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown flush error');
-            throw new AnvilDbException("Failed to flush: {$errorMsg}");
-        }
+        $this->driver->flush();
     }
 
     /**
@@ -146,14 +130,7 @@ class AnvilDb
     public function configureBuffer(int $maxDocs = 100, int $flushIntervalSecs = 5): void
     {
         $this->ensureOpen();
-        $ffi = Bridge::get();
-        $result = $ffi->anvildb_configure_buffer($this->handle, $maxDocs, $flushIntervalSecs);
-
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown error');
-            throw new AnvilDbException("Failed to configure buffer: {$errorMsg}");
-        }
+        $this->driver->configureBuffer($maxDocs, $flushIntervalSecs);
     }
 
     /**
@@ -176,7 +153,7 @@ class AnvilDb
     public function collection(string $name): Collection
     {
         $this->ensureOpen();
-        return new Collection($this->handle, $name);
+        return new Collection($this->driver, $name);
     }
 
     /**
@@ -196,14 +173,7 @@ class AnvilDb
     public function createCollection(string $name): void
     {
         $this->ensureOpen();
-        $ffi = Bridge::get();
-        $result = $ffi->anvildb_create_collection($this->handle, $name);
-
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown error');
-            throw new AnvilDbException("Failed to create collection: {$errorMsg}");
-        }
+        $this->driver->createCollection($name);
     }
 
     /**
@@ -222,14 +192,7 @@ class AnvilDb
     public function dropCollection(string $name): void
     {
         $this->ensureOpen();
-        $ffi = Bridge::get();
-        $result = $ffi->anvildb_drop_collection($this->handle, $name);
-
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown error');
-            throw new AnvilDbException("Failed to drop collection: {$errorMsg}");
-        }
+        $this->driver->dropCollection($name);
     }
 
     /**
@@ -243,21 +206,9 @@ class AnvilDb
     public function listCollections(): array
     {
         $this->ensureOpen();
-        $ffi = Bridge::get();
-        $resultPtr = $ffi->anvildb_list_collections($this->handle);
+        $json = $this->driver->listCollections();
 
-        if ($resultPtr === null) {
-            return [];
-        }
-
-        if (is_string($resultPtr)) {
-            $resultJson = $resultPtr;
-        } else {
-            $resultJson = \FFI::string($resultPtr);
-            $ffi->anvildb_free_string($resultPtr);
-        }
-
-        return json_decode($resultJson, true, 512, JSON_THROW_ON_ERROR);
+        return json_decode($json, true, 512, JSON_THROW_ON_ERROR);
     }
 
     /**
@@ -283,14 +234,7 @@ class AnvilDb
     public function encrypt(string $key): void
     {
         $this->ensureOpen();
-        $ffi = Bridge::get();
-        $result = $ffi->anvildb_encrypt($this->handle, $key);
-
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown error');
-            throw new AnvilDbException("Failed to encrypt: {$errorMsg}");
-        }
+        $this->driver->encrypt($key);
     }
 
     /**
@@ -309,14 +253,7 @@ class AnvilDb
     public function decrypt(string $key): void
     {
         $this->ensureOpen();
-        $ffi = Bridge::get();
-        $result = $ffi->anvildb_decrypt($this->handle, $key);
-
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown error');
-            throw new AnvilDbException("Failed to decrypt: {$errorMsg}");
-        }
+        $this->driver->decrypt($key);
     }
 
     /**
@@ -329,8 +266,7 @@ class AnvilDb
     public function clearCache(): void
     {
         $this->ensureOpen();
-        $ffi = Bridge::get();
-        $ffi->anvildb_clear_cache($this->handle);
+        $this->driver->clearCache();
     }
 
     /**
@@ -340,20 +276,7 @@ class AnvilDb
      */
     private function consumeWarnings(): void
     {
-        $ffi = Bridge::get();
-        $ptr = $ffi->anvildb_last_warning($this->handle);
-
-        if ($ptr === null) {
-            return;
-        }
-
-        $json = is_string($ptr) ? $ptr : \FFI::string($ptr);
-        $ffi->anvildb_free_string($ptr);
-
-        $warnings = json_decode($json, true);
-        if (!is_array($warnings)) {
-            return;
-        }
+        $warnings = $this->driver->getWarnings();
 
         foreach ($warnings as $warning) {
             trigger_error("AnvilDB: {$warning}", E_USER_WARNING);

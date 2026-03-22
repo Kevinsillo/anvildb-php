@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace AnvilDb\Query;
 
+use AnvilDb\Driver\DriverInterface;
 use AnvilDb\Exception\AnvilDbException;
-use AnvilDb\FFI\Bridge;
 
 /**
  * Fluent query builder for constructing and executing document queries.
  */
 class QueryBuilder
 {
-    private \FFI\CData $handle;
+    private DriverInterface $driver;
     private string $collection;
     private array $filters = [];
     private array $joins = [];
@@ -23,12 +23,12 @@ class QueryBuilder
     private ?int $offset = null;
 
     /**
-     * @param \FFI\CData $handle     Database engine handle
-     * @param string     $collection Collection name to query
+     * @param DriverInterface $driver     Database engine driver
+     * @param string          $collection Collection name to query
      */
-    public function __construct(\FFI\CData $handle, string $collection)
+    public function __construct(DriverInterface $driver, string $collection)
     {
-        $this->handle = $handle;
+        $this->driver = $driver;
         $this->collection = $collection;
     }
 
@@ -384,22 +384,8 @@ class QueryBuilder
             $spec['offset'] = $this->offset;
         }
 
-        $ffi = Bridge::get();
         $json = json_encode($spec, JSON_THROW_ON_ERROR);
-        $resultPtr = $ffi->anvildb_query($this->handle, $json);
-
-        if ($resultPtr === null) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown query error');
-            throw new AnvilDbException($errorMsg);
-        }
-
-        if (is_string($resultPtr)) {
-            $resultJson = $resultPtr;
-        } else {
-            $resultJson = \FFI::string($resultPtr);
-            $ffi->anvildb_free_string($resultPtr);
-        }
+        $resultJson = $this->driver->query($json);
 
         return json_decode($resultJson, true, 512, JSON_THROW_ON_ERROR);
     }
@@ -420,17 +406,8 @@ class QueryBuilder
      */
     public function count(): int
     {
-        $ffi = Bridge::get();
         $filterJson = !empty($this->filters) ? json_encode($this->filters, JSON_THROW_ON_ERROR) : null;
 
-        $result = $ffi->anvildb_count($this->handle, $this->collection, $filterJson);
-
-        if ($result < 0) {
-            $error = $ffi->anvildb_last_error($this->handle);
-            $errorMsg = is_string($error) ? $error : ($error !== null ? \FFI::string($error) : 'Unknown count error');
-            throw new AnvilDbException($errorMsg);
-        }
-
-        return (int) $result;
+        return $this->driver->count($this->collection, $filterJson);
     }
 }
