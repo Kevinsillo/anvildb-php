@@ -47,7 +47,11 @@ class DriverFactory
         }
 
         if (extension_loaded('ffi')) {
-            return new FFIDriver();
+            try {
+                return new FFIDriver();
+            } catch (\Throwable) {
+                // FFI loaded but restricted (ffi.enable=preload) — fall through to Process
+            }
         }
 
         return new ProcessDriver();

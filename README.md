@@ -29,7 +29,7 @@ Add the repository and require the package in your `composer.json`:
         }
     ],
     "require": {
-        "kevinsillo/anvildb": "v0.5.0"
+        "kevinsillo/anvildb": "v0.6.0"
     }
 }
 ```
