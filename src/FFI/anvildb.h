@@ -23,6 +23,10 @@ const char* anvildb_bulk_insert(AnvilDbHandle handle, const char* collection, co
 const char* anvildb_query(AnvilDbHandle handle, const char* json_query_spec);
 int64_t anvildb_count(AnvilDbHandle handle, const char* collection, const char* json_filter);
 
+// Bulk mutations
+int64_t anvildb_update_where(AnvilDbHandle handle, const char* collection, const char* json_filter, const char* json_doc);
+int64_t anvildb_delete_where(AnvilDbHandle handle, const char* collection, const char* json_filter);
+
 // Indexes
 int32_t anvildb_create_index(AnvilDbHandle handle, const char* collection, const char* field, const char* index_type);
 int32_t anvildb_drop_index(AnvilDbHandle handle, const char* collection, const char* field);

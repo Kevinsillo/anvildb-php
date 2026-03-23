@@ -391,6 +391,56 @@ class QueryBuilder
     }
 
     /**
+     * Update all documents matching the current filters.
+     *
+     * Merges the given fields into each matching document (preserving `id` and other existing fields).
+     *
+     * @param array<string, mixed> $data Fields to set on matching documents
+     *
+     * @return int Number of documents updated
+     *
+     * @throws AnvilDbException If the update fails or no filters are set
+     * @throws \JsonException   If encoding fails
+     *
+     * ```php
+     * $affected = $collection->where('status', '=', 'inactive')
+     *     ->update(['status' => 'archived']);
+     * // $affected = 15
+     * ```
+     *
+     * @see delete() To delete matching documents instead
+     */
+    public function update(array $data): int
+    {
+        $filterJson = json_encode($this->filters, JSON_THROW_ON_ERROR);
+        $docJson = json_encode($data, JSON_THROW_ON_ERROR);
+
+        return $this->driver->updateWhere($this->collection, $filterJson, $docJson);
+    }
+
+    /**
+     * Delete all documents matching the current filters.
+     *
+     * @return int Number of documents deleted
+     *
+     * @throws AnvilDbException If the delete fails or no filters are set
+     * @throws \JsonException   If encoding fails
+     *
+     * ```php
+     * $deleted = $collection->where('age', '<', 18)->delete();
+     * // $deleted = 3
+     * ```
+     *
+     * @see update() To update matching documents instead
+     */
+    public function delete(): int
+    {
+        $filterJson = json_encode($this->filters, JSON_THROW_ON_ERROR);
+
+        return $this->driver->deleteWhere($this->collection, $filterJson);
+    }
+
+    /**
      * Count the documents matching the current filters (without fetching them).
      *
      * More efficient than `count(get())` as it doesn't transfer document data.

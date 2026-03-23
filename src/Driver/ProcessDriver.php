@@ -158,6 +158,27 @@ class ProcessDriver implements DriverInterface
         ]);
     }
 
+    public function updateWhere(string $collection, string $jsonFilter, string $jsonDoc): int
+    {
+        $response = $this->send('update_where', [
+            'collection' => $collection,
+            'filter' => $jsonFilter,
+            'document' => $jsonDoc,
+        ]);
+
+        return (int) $response['data'];
+    }
+
+    public function deleteWhere(string $collection, string $jsonFilter): int
+    {
+        $response = $this->send('delete_where', [
+            'collection' => $collection,
+            'filter' => $jsonFilter,
+        ]);
+
+        return (int) $response['data'];
+    }
+
     public function bulkInsert(string $collection, string $jsonDocs): string
     {
         $response = $this->send('bulk_insert', [

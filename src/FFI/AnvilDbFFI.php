@@ -129,6 +129,31 @@ interface AnvilDbFFI
      */
     public function anvildb_bulk_insert(\FFI\CData $handle, string $collection, string $json_docs): string|\FFI\CData|null;
 
+    // ── Bulk mutations ─────────────────────────────────────────
+
+    /**
+     * Update all documents matching a filter.
+     *
+     * @param \FFI\CData $handle      Engine handle
+     * @param string     $collection  Collection name
+     * @param string     $json_filter JSON-encoded filter array
+     * @param string     $json_doc    JSON-encoded partial document (fields to merge)
+     *
+     * @return int Number of documents updated, or negative on error
+     */
+    public function anvildb_update_where(\FFI\CData $handle, string $collection, string $json_filter, string $json_doc): int;
+
+    /**
+     * Delete all documents matching a filter.
+     *
+     * @param \FFI\CData $handle      Engine handle
+     * @param string     $collection  Collection name
+     * @param string     $json_filter JSON-encoded filter array
+     *
+     * @return int Number of documents deleted, or negative on error
+     */
+    public function anvildb_delete_where(\FFI\CData $handle, string $collection, string $json_filter): int;
+
     // ── Queries ────────────────────────────────────────────────
 
     /**

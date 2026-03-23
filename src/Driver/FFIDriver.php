@@ -136,6 +136,30 @@ class FFIDriver implements DriverInterface
         }
     }
 
+    public function updateWhere(string $collection, string $jsonFilter, string $jsonDoc): int
+    {
+        $this->ensureOpen();
+        $result = $this->ffi->anvildb_update_where($this->handle, $collection, $jsonFilter, $jsonDoc);
+
+        if ($result < 0) {
+            throw new AnvilDbException($this->getLastError());
+        }
+
+        return (int) $result;
+    }
+
+    public function deleteWhere(string $collection, string $jsonFilter): int
+    {
+        $this->ensureOpen();
+        $result = $this->ffi->anvildb_delete_where($this->handle, $collection, $jsonFilter);
+
+        if ($result < 0) {
+            throw new AnvilDbException($this->getLastError());
+        }
+
+        return (int) $result;
+    }
+
     public function bulkInsert(string $collection, string $jsonDocs): string
     {
         $this->ensureOpen();

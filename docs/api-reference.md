@@ -232,6 +232,33 @@ Skips the first N results.
 
 Executes the query and returns matching documents.
 
+### `update(array $data): int`
+
+Updates all documents matching the current filters. Merges the given fields into each matching document (preserving `id` and other existing fields). Returns the number of documents updated.
+
+Requires at least one filter — empty filters are rejected to prevent accidental mass updates.
+
+```php
+$affected = $collection->where('status', '=', 'inactive')
+    ->update(['status' => 'archived']);
+// $affected = 15
+
+$affected = $collection->where('role', '=', 'guest')
+    ->where('last_login', '<', '2025-01-01')
+    ->update(['role' => 'inactive']);
+```
+
+### `delete(): int`
+
+Deletes all documents matching the current filters. Returns the number of documents deleted.
+
+Requires at least one filter — empty filters are rejected to prevent accidental mass deletes.
+
+```php
+$deleted = $collection->where('age', '<', 18)->delete();
+// $deleted = 3
+```
+
 ### `count(): int`
 
 Returns the count of matching documents.

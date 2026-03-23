@@ -87,6 +87,27 @@ interface DriverInterface
     public function delete(string $collection, string $id): void;
 
     /**
+     * Update documents matching a filter.
+     *
+     * @param string $collection Collection name
+     * @param string $jsonFilter JSON-encoded filter array
+     * @param string $jsonDoc    JSON-encoded partial document (fields to merge)
+     *
+     * @return int Number of documents updated
+     */
+    public function updateWhere(string $collection, string $jsonFilter, string $jsonDoc): int;
+
+    /**
+     * Delete documents matching a filter.
+     *
+     * @param string $collection Collection name
+     * @param string $jsonFilter JSON-encoded filter array
+     *
+     * @return int Number of documents deleted
+     */
+    public function deleteWhere(string $collection, string $jsonFilter): int;
+
+    /**
      * Insert multiple documents in a single operation.
      *
      * @param string $collection Collection name
